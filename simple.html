@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>JSZipでZIP内MP3再生（日本語ファイル対応）</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/encoding-japanese@2.0.0/encoding.min.js"></script>
+</head>
+<body>
+  <h1>ZIP内のMP3プレイヤー</h1>
+  <input type="file" id="zipInput" accept=".zip,.mp3" />
+  <ul id="trackList"></ul>
+  <audio id="audioPlayer" controls></audio>
+
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      const zipInput = document.getElementById('zipInput');
+      const trackList = document.getElementById('trackList');
+      const audioPlayer = document.getElementById('audioPlayer');
+
+      zipInput.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const arrayBuffer = await file.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+
+        const zip = new JSZip();
+        let loadedZip;
+        try {
+          const decoder = new TextDecoder("Shift_JIS");
+          loadedZip = await zip.loadAsync(uint8Array, {
+        decodeFileName: (bytes) => {
+              return decoder.decode(bytes)
+            }
+          });
+        } catch (e) {
+          alert("ZIP読み込みエラー: " + e.message);
+          console.error(e);
+          return;
+        }
+
+        trackList.innerHTML = '';
+
+        let found = false;
+
+        for (const [filename, fileData] of Object.entries(loadedZip.files)) {
+          if (!filename.toLowerCase().endsWith('.mp3')) continue;
+          found = true;
+
+          const blob = await fileData.async('blob');
+          const url = URL.createObjectURL(blob);
+
+          const li = document.createElement('li');
+          const button = document.createElement('button');
+          button.textContent = filename;
+          button.onclick = () => {
+            audioPlayer.src = url;
+            audioPlayer.play();
+          };
+
+          li.appendChild(button);
+          trackList.appendChild(li);
+        }
+
+        if (!found) {
+          trackList.innerHTML = '<li>MP3ファイルが見つかりませんでした。</li>';
+        }
+      });
+    });
+  </script>
+</body>
+</html>

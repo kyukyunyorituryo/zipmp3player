@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>ZIP.MP3 プレイヤー（ID3タグ対応）</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/encoding-japanese@2.0.0/encoding.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
+  <style>
+    body {
+      background-color: #121212;
+      color: #fff;
+      font-family: 'Helvetica Neue', sans-serif;
+      padding: 20px;
+    }
+    h1 {
+      color: #1db954;
+    }
+    input {
+      margin-bottom: 20px;
+      background: #333;
+      color: #fff;
+      padding: 10px;
+      border: none;
+      border-radius: 4px;
+    }
+    .track {
+      background-color: #282828;
+      border-radius: 8px;
+      padding: 10px 15px;
+      margin-bottom: 10px;
+      display: flex;
+      flex-direction: column;
+      transition: background 0.3s;
+    }
+    .track:hover {
+      background-color: #333;
+    }
+    .track-info {
+      margin-bottom: 8px;
+    }
+    .track-title {
+      font-weight: bold;
+      font-size: 16px;
+    }
+    .track-meta {
+      font-size: 14px;
+      color: #aaa;
+    }
+    .play-btn {
+      align-self: flex-start;
+      background-color: #1db954;
+      border: none;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 50px;
+      cursor: pointer;
+    }
+    audio {
+      width: 100%;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>ZIP MP3 プレイヤー</h1>
+  <input type="file" id="zipInput" accept=".zip,.mp3" />
+  <div id="trackList"></div>
+  <audio id="audioPlayer" controls></audio>
+
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      const zipInput = document.getElementById('zipInput');
+      const trackList = document.getElementById('trackList');
+      const audioPlayer = document.getElementById('audioPlayer');
+
+      zipInput.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const arrayBuffer = await file.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+
+        const zip = new JSZip();
+        let loadedZip;
+
+        try {
+          const decoder = new TextDecoder("Shift_JIS");
+          loadedZip = await zip.loadAsync(uint8Array, {
+        decodeFileName: (bytes) => {
+              return decoder.decode(bytes)
+            }
+          });
+        } catch (e) {
+          alert('ZIP読み込みエラー: ' + e.message);
+          console.error(e);
+          return;
+        }
+
+        trackList.innerHTML = '';
+
+        for (const [filename, fileData] of Object.entries(loadedZip.files)) {
+          if (!filename.toLowerCase().endsWith('.mp3')) continue;
+
+          const blob = await fileData.async('blob');
+          const url = URL.createObjectURL(blob);
+
+          const arrayBuffer = await fileData.async('arraybuffer');
+          jsmediatags.read(new Blob([arrayBuffer]), {
+            onSuccess: (tag) => {
+              const title = tag.tags.title || filename;
+              const artist = tag.tags.artist || '不明なアーティスト';
+              const album = tag.tags.album || '不明なアルバム';
+
+              const trackDiv = document.createElement('div');
+              trackDiv.className = 'track';
+
+              const infoDiv = document.createElement('div');
+              infoDiv.className = 'track-info';
+              infoDiv.innerHTML = `
+                <div class="track-title">${title}</div>
+                <div class="track-meta">${artist} ・ ${album}</div>
+              `;
+
+              const playBtn = document.createElement('button');
+              playBtn.className = 'play-btn';
+              playBtn.textContent = '▶ 再生';
+              playBtn.onclick = () => {
+                audioPlayer.src = url;
+                audioPlayer.play();
+              };
+
+              trackDiv.appendChild(infoDiv);
+              trackDiv.appendChild(playBtn);
+              trackList.appendChild(trackDiv);
+            },
+            onError: (error) => {
+              console.warn('タグ読み込みエラー:', filename, error);
+
+              // タグ取得できなかった場合の表示
+              const trackDiv = document.createElement('div');
+              trackDiv.className = 'track';
+
+              const infoDiv = document.createElement('div');
+              infoDiv.className = 'track-info';
+              infoDiv.innerHTML = `
+                <div class="track-title">${filename}</div>
+                <div class="track-meta">タグ情報なし</div>
+              `;
+
+              const playBtn = document.createElement('button');
+              playBtn.className = 'play-btn';
+              playBtn.textContent = '▶ 再生';
+              playBtn.onclick = () => {
+                audioPlayer.src = url;
+                audioPlayer.play();
+              };
+
+              trackDiv.appendChild(infoDiv);
+              trackDiv.appendChild(playBtn);
+              trackList.appendChild(trackDiv);
+            }
+          });
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>ZIP.MP3プレイヤー</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/encoding-japanese@2.0.0/encoding.min.js"></script>
+  <style>
+    body {
+      background-color: #121212;
+      color: #fff;
+      font-family: 'Helvetica Neue', sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h1 {
+      color: #1d94b9;
+    }
+
+    #zipInput, #shuffleToggle {
+      margin-bottom: 10px;
+      background: #333;
+      color: #fff;
+      padding: 10px;
+      border: none;
+      border-radius: 4px;
+    }
+
+    #shuffleToggle {
+      cursor: pointer;
+    }
+
+    #nowPlaying {
+      margin: 15px 0;
+      font-size: 18px;
+      color: #1d94b9;
+    }
+
+    .track {
+      background-color: #282828;
+      border-radius: 8px;
+      padding: 10px 15px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background 0.3s;
+    }
+
+    .track:hover {
+      background-color: #333;
+    }
+
+    .track-name {
+      font-size: 16px;
+      flex-grow: 1;
+    }
+
+    .play-btn {
+      background-color: #1d94b9;
+      border: none;
+      color: white;
+      padding: 8px 14px;
+      border-radius: 50px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    audio {
+      width: 100%;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>ZIP.MP3 プレイヤー</h1>
+  <input type="file" id="zipInput" accept=".zip,.mp3" />
+  <button id="shuffleToggle">シャッフル再生: OFF</button>
+  <audio id="audioPlayer" controls></audio>
+  <!-- 🎵 再生中の曲タイトル表示 -->
+  <div id="nowPlaying">再生中: なし</div>
+
+  <div id="trackList"></div>
+
+
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      const zipInput = document.getElementById('zipInput');
+      const trackList = document.getElementById('trackList');
+      const audioPlayer = document.getElementById('audioPlayer');
+      const shuffleToggle = document.getElementById('shuffleToggle');
+      const nowPlaying = document.getElementById('nowPlaying');
+
+      let playlist = [];
+      let currentIndex = 0;
+      let isShuffle = false;
+
+      function playTrack(index) {
+        const track = playlist[index];
+        if (!track) return;
+        currentIndex = index;
+        audioPlayer.src = track.url;
+        audioPlayer.play();
+
+        // 🎵 再生中の曲名を表示
+        nowPlaying.textContent = `再生中: ${track.filename}`;
+      }
+
+      function playNextTrack() {
+        if (isShuffle) {
+          currentIndex = Math.floor(Math.random() * playlist.length);
+        } else {
+          currentIndex = (currentIndex + 1) % playlist.length;
+        }
+        playTrack(currentIndex);
+      }
+
+      shuffleToggle.addEventListener('click', () => {
+        isShuffle = !isShuffle;
+        shuffleToggle.textContent = 'シャッフル再生: ' + (isShuffle ? 'ON' : 'OFF');
+      });
+
+      audioPlayer.addEventListener('ended', () => {
+        playNextTrack();
+      });
+
+      zipInput.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const arrayBuffer = await file.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+
+        const zip = new JSZip();
+        let loadedZip;
+
+        try {
+          const decoder = new TextDecoder("Shift_JIS");
+          loadedZip = await zip.loadAsync(uint8Array, {
+            decodeFileName: (bytes) => decoder.decode(bytes)
+          });
+        } catch (e) {
+          alert('ZIP読み込みエラー: ' + e.message);
+          console.error(e);
+          return;
+        }
+
+        trackList.innerHTML = '';
+        playlist = [];
+        currentIndex = 0;
+        nowPlaying.textContent = '再生中: なし';
+
+        for (const [filename, fileData] of Object.entries(loadedZip.files)) {
+          if (!filename.toLowerCase().endsWith('.mp3')) continue;
+
+          const blob = await fileData.async('blob');
+          const url = URL.createObjectURL(blob);
+
+          const trackDiv = document.createElement('div');
+          trackDiv.className = 'track';
+
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'track-name';
+          nameSpan.textContent = filename;
+
+          const playButton = document.createElement('button');
+          playButton.className = 'play-btn';
+          playButton.textContent = '▶ 再生';
+
+          const index = playlist.length;
+          playButton.onclick = () => playTrack(index);
+
+          trackDiv.appendChild(nameSpan);
+          trackDiv.appendChild(playButton);
+          trackList.appendChild(trackDiv);
+
+          playlist.push({ filename, url });
+        }
+
+        if (playlist.length === 0) {
+          trackList.innerHTML = '<p>MP3ファイルが見つかりませんでした。</p>';
+        }
+      });
+    });
+  </script>
+</body>
+</html>

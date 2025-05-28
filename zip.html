@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>ZIPファイル内のファイル名一覧表示</title>
+  <!-- ライブラリ読み込み -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/encoding-japanese@2.0.0/encoding.min.js"></script>
+</head>
+<body>
+  <h1>ZIPファイルの中身を見る</h1>
+  <input type="file" id="zipInput" accept=".zip">
+  <ul id="fileList"></ul>
+
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      const zipInput = document.getElementById('zipInput');
+      const fileList = document.getElementById('fileList');
+
+      zipInput.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const arrayBuffer = await file.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+
+        const zip = new JSZip();
+        let loadedZip;
+
+        try {
+            const decoder = new TextDecoder("Shift_JIS");
+          loadedZip = await zip.loadAsync(uint8Array, {
+            decodeFileName: (bytes) => {
+              return decoder.decode(bytes)
+            }
+          });
+        } catch (e) {
+          alert('ZIP読み込みエラー: ' + e.message);
+          console.error(e);
+          return;
+        }
+
+        fileList.innerHTML = ''; // リスト初期化
+
+        for (const filename in loadedZip.files) {
+          const li = document.createElement('li');
+          li.textContent = filename;
+          fileList.appendChild(li);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
